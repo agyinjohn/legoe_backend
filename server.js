@@ -4,6 +4,7 @@ const cors = require("cors");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const Appointment = require("./models/appointment");
+const Contact = require("./models/contact");
 const cron = require("node-cron");
 
 const app = express();
@@ -50,6 +51,61 @@ app.post("/api/appointment", async (req, res) => {
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Failed to process appointment" });
+  }
+});
+
+app.post("/api/contact", async (req, res) => {
+  try {
+    const contactData = {
+      name: req.body.name,
+      email: req.body.email,
+      phone: req.body.phone,
+      inquiry: req.body.inquiry,
+      message: req.body.message,
+    };
+
+    // Save to MongoDB
+    const contact = new Contact(contactData);
+    await contact.save();
+
+    // Send notification email to staff
+    await transporter.sendMail({
+      from: contactData.email,
+      to: process.env.EMAIL_USER,
+      subject: `New ${contactData.inquiry} Inquiry`,
+      html: `
+        <h2>New Contact Form Submission</h2>
+        <p><strong>From:</strong> ${contactData.name}</p>
+        <p><strong>Email:</strong> ${contactData.email}</p>
+        <p><strong>Phone:</strong> ${contactData.phone}</p>
+        <p><strong>Inquiry Type:</strong> ${contactData.inquiry}</p>
+        <p><strong>Message:</strong></p>
+        <p>${contactData.message}</p>
+      `,
+    });
+
+    // Send confirmation email to user
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: contactData.email,
+      subject: "Thank you for contacting us",
+      html: `
+        <h2>Thank you for reaching out</h2>
+        <p>Dear ${contactData.name},</p>
+        <p>We have received your message regarding ${contactData.inquiry}.</p>
+        <p>Our team will review your inquiry and get back to you shortly.</p>
+        <p>Your message:</p>
+        <blockquote>${contactData.message}</blockquote>
+        <br>
+        <p>Best regards,</p>
+        <p>Legoe Physio & Wellness Center</p>
+      `,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Contact form error:", error);
+    res.status(500).json({ error: "Failed to process contact form" });
   }
 });
 
